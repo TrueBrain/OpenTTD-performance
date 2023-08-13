@@ -1,0 +1,13 @@
+diff --git a/cmake/scripts/FindVersion.cmake b/cmake/scripts/FindVersion.cmake
+index 43255e801..747fb7b45 100644
+--- a/cmake/scripts/FindVersion.cmake
++++ b/cmake/scripts/FindVersion.cmake
+@@ -87,6 +87,8 @@ if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+         set(HASHPREFIX "-u")
+     endif()
+ 
++    set(TAG "")
++
+     # Set the version string
+     if(NOT TAG STREQUAL "")
+         set(REV_VERSION "${TAG}")

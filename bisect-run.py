@@ -9,7 +9,7 @@ def str_to_date(str):
     return datetime.date.fromisoformat(str)
 
 def get_commit_date(date):
-    commit_hash = subprocess.run(shlex.split(f"git rev-list -n 1 --first-parent --before='{date}' master"), cwd="./OpenTTD", stdout=subprocess.PIPE).stdout.decode().strip()
+    commit_hash = subprocess.run(shlex.split(f"git rev-list -n 1 --first-parent --before='{date}T23:59:59Z' master"), cwd="./OpenTTD", stdout=subprocess.PIPE).stdout.decode().strip()
     commit_date = subprocess.run(shlex.split(f"git show -s --format=%ci {commit_hash}"), cwd="./OpenTTD", stdout=subprocess.PIPE).stdout.decode().strip().split(" ")[0]
     return str_to_date(commit_date)
 

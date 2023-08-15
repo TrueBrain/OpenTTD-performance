@@ -14,7 +14,7 @@ fi
 
 cd OpenTTD
 
-commit_hash=$(git rev-list -n 1 --first-parent --before="${date}" master | cut -b -10)
+commit_hash=$(git rev-list -n 1 --first-parent --before="${date}T23:59:59Z" master | cut -b -10)
 commit_date=$(git show -s --format=%ci ${commit_hash} | cut -d\  -f1)
 version=$(echo ${commit_date} | sed s/-//g)--m${commit_hash}
 

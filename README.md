@@ -14,6 +14,17 @@ This repository contains scripts to run performance measurements, in a reproduce
 - This only works for OpenTTD versions that are compilable with CMake in the linux-generic build environment.
   Two patches are applied to make the result more predictable, but there is a limit how far back this works.
 
+## Getting the NewGRFs
+
+Get any recent OpenTTD version, and run:
+
+```bash
+./openttd -X -c performance-config/openttd.cfg -x
+```
+
+Now go to the save folder, and download all the NewGRFs for all the savegames.
+Make sure that you can start them all before continuing.
+
 ## Usage
 
 ```bash

@@ -80,3 +80,6 @@ for line in $(cat performance.matrix); do
 
     rm -rf ${tmp}
 done
+
+cp result.csv result_tot.csv
+python3 convert.py > result_per.csv

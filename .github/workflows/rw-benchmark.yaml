@@ -1,0 +1,172 @@
+name: Benchmark
+
+on:
+  workflow_call:
+    inputs:
+      savegame:
+        required: true
+        type: string
+      ticks:
+        required: true
+        type: number
+      mem-ticks:
+        required: true
+        type: number
+      date_yesterday:
+        required: true
+        type: string
+      date_today:
+        required: true
+        type: string
+
+jobs:
+  benchmark:
+    name: Benchmark
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Enabling perf stat
+      shell: bash
+      run: |
+        echo "-1" | sudo tee /proc/sys/kernel/perf_event_paranoid
+
+    - name: CPU information
+      shell: bash
+      run: |
+        cat /proc/cpuinfo | grep "model name" | head -n 1
+        cat /proc/cpuinfo | grep "cpu MHz" | head -n 1
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt install \
+          libgoogle-perftools-dev \
+          libunwind-dev \
+          golang \
+          # EOF
+
+        go install github.com/google/pprof@latest
+
+    - name: Download bundles
+      uses: actions/download-artifact@v4
+      with:
+        pattern: openttd-*
+        merge-multiple: true
+
+    - name: Preparing
+      shell: bash
+      run: |
+        wget -q https://cdn.openttd.org/openttd-releases/12.0/openttd-12.0-linux-generic-amd64.tar.xz
+
+        for i in $(ls *.tar.xz); do
+          echo "Extracting ${i} ..."
+          tar xf ${i}
+          rm ${i}
+        done
+
+    - name: Downloading NewGRFs
+      shell: bash
+      run: |
+        cd openttd-20211017-*
+
+        mkdir ../performance-config/newgrf
+
+        # "-q" has a bug before 14.0, where the NewGRF ID was not byte-swapped. The \4\3\2\1 fixes that.
+        for newgrf in $(./openttd -q ../performance-config/save/${{ inputs.savegame }} 2>/dev/null | sed '/NewGRFs:/ ! D;:loop;N;s/.*\n//;s/^\(..\)\(..\)\(..\)\(..\)/\4\3\2\1/;s/ /;/g;p;b loop' | sed 's/ /;/g'); do
+          id=$(echo "${newgrf}" | cut -d\; -f1 | tr [A-Z] [a-z])
+          md5sum=$(echo "${newgrf}" | cut -d\; -f2 | tr [A-Z] [a-z])
+
+          echo "Downloading ${id} ..."
+
+          wget -q -O ../performance-config/newgrf/${id}.tar.gz https://bananas-cdn.openttd.org/newgrf/${id}/${md5sum}/download.tar.gz
+          gunzip ../performance-config/newgrf/${id}.tar.gz
+        done
+
+    - name: Baseline (12.0)
+      shell: bash
+      id: result_baseline
+      run: |
+        cd openttd-12.0-linux-generic-amd64
+        cp -R ../performance-config/* .
+
+        ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
+
+    - name: Stable (12.0)
+      shell: bash
+      id: result_stable
+      run: |
+        cd openttd-20211017-*
+        cp -R ../performance-config/* .
+
+        ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
+
+    - name: Today (${{ inputs.date_today }})
+      shell: bash
+      id: result_today
+      run: |
+        cd openttd-${{ inputs.date_today }}-*
+        cp -R ../performance-config/* .
+
+        ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
+
+    - name: Yesterday (${{ inputs.date_yesterday }})
+      shell: bash
+      id: result_yesterday
+      run: |
+        cd openttd-${{ inputs.date_yesterday }}-*
+        cp -R ../performance-config/* .
+
+        ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
+
+    - name: CPU profile
+      shell: bash
+      run: |
+        cd openttd-${{ inputs.date_today }}-*
+
+        ../profile.sh cpu ${{ inputs.ticks }} ${{ inputs.savegame }}
+        mv ${{ inputs.savegame }}.cpu-prof.gz ..
+
+    - name: Memory profile
+      shell: bash
+      run: |
+        cd openttd-${{ inputs.date_today }}-*
+
+        ../profile.sh mem ${{ inputs.mem-ticks }} ${{ inputs.savegame }}
+        mv ${{ inputs.savegame }}.mem-prof.gz ..
+
+    - name: Reporting
+      shell: bash
+      run: |
+        echo "savegame,version,cpu,cpu_stdev,memory"
+        echo "${{ inputs.savegame }},baseline,${{ steps.result_baseline.outputs.cpu }},${{ steps.result_baseline.outputs.cpu_stdev }},${{ steps.result_baseline.outputs.memory }}" > ${{ inputs.savegame }}.performance
+        echo "${{ inputs.savegame }},stable,${{ steps.result_stable.outputs.cpu }},${{ steps.result_stable.outputs.cpu_stdev }},${{ steps.result_stable.outputs.memory }}" >> ${{ inputs.savegame }}.performance
+        echo "${{ inputs.savegame }},today,${{ steps.result_today.outputs.cpu }},${{ steps.result_today.outputs.cpu_stdev }},${{ steps.result_today.outputs.memory }}" >> ${{ inputs.savegame }}.performance
+        echo "${{ inputs.savegame }},yesterday,${{ steps.result_yesterday.outputs.cpu }},${{ steps.result_yesterday.outputs.cpu_stdev }},${{ steps.result_yesterday.outputs.memory }}" >> ${{ inputs.savegame }}.performance
+
+        cat ${{ inputs.savegame }}.performance
+
+    - name: Store CPU profile
+      uses: actions/upload-artifact@v4
+      with:
+        name: profile-cpu-${{ inputs.savegame }}
+        path: ${{ inputs.savegame }}.cpu-prof.gz
+        retention-days: 5
+
+    - name: Store memory profile
+      uses: actions/upload-artifact@v4
+      with:
+        name: profile-mem-${{ inputs.savegame }}
+        path: ${{ inputs.savegame }}.mem-prof.gz
+        retention-days: 5
+
+    - name: Store performance report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-${{ inputs.savegame }}
+        path: ${{ inputs.savegame }}.performance
+        retention-days: 5

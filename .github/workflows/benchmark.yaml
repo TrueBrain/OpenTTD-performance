@@ -1,0 +1,230 @@
+name: Benchmark
+
+on:
+  schedule:
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date to benchmark'
+        required: true
+        default: "2024-01-01"
+
+jobs:
+  versions:
+    name: Find versions
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout OpenTTD
+      uses: actions/checkout@v4
+      with:
+        repository: OpenTTD/OpenTTD
+        fetch-depth: 0
+
+    - name: Detect versions
+      shell: bash
+      id: versions
+      run: |
+        if [ -z "${{ inputs.date }}" ]; then
+          today=$(date -d "-1 day" +%Y-%m-%d)
+        else
+          today=$(date -d "${{ inputs.date }}" +%Y-%m-%d)
+        fi
+        yesterday=$(date -d "${today} - 1 day" +%Y-%m-%d)
+
+        # Find the hash of today / yesterday.
+        hash_today=$(git rev-list -n 1 --first-parent --before="${today}T23:59:59Z" master)
+        hash_yesterday=$(git rev-list -n 1 --first-parent --before="${yesterday}T23:59:59Z" master)
+
+        echo "Today's date: ${today}"
+        echo "Today's hash: ${hash_today}"
+        echo "Yesterday's date: ${yesterday}"
+        echo "Yesterday's hash: ${hash_yesterday}"
+
+        if [ "${hash_today}" = "${hash_yesterday}" ]; then
+          echo "No new commits since yesterday."
+          exit 1
+        fi
+
+        echo "date_today=$(echo ${today} | sed 's/-//g')" >> $GITHUB_OUTPUT
+        echo "hash_today=${hash_today}" >> $GITHUB_OUTPUT
+        echo "date_yesterday=$(echo ${yesterday} | sed 's/-//g')" >> $GITHUB_OUTPUT
+        echo "hash_yesterday=${hash_yesterday}" >> $GITHUB_OUTPUT
+
+    outputs:
+      date_today: ${{ steps.versions.outputs.date_today }}
+      hash_today: ${{ steps.versions.outputs.hash_today }}
+      date_yesterday: ${{ steps.versions.outputs.date_yesterday }}
+      hash_yesterday: ${{ steps.versions.outputs.hash_yesterday }}
+
+  compile:
+    name: Compile
+    needs: versions
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: today
+          hash: ${{ needs.versions.outputs.hash_today }}
+        - name: yesterday
+          hash: ${{ needs.versions.outputs.hash_yesterday }}
+        - name: stable
+          hash: "12.0"
+
+    uses: ./.github/workflows/rw-compile.yaml
+    with:
+      name: ${{ matrix.name }}
+      hash: ${{ matrix.hash }}
+
+  benchmark:
+    name: Benchmark
+    needs:
+    - versions
+    - compile
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - savegame: "wentbourne.sav"
+          ticks: 1000
+          mem-ticks: 200
+        - savegame: "opntitle.sav"
+          ticks: 100000
+          mem-ticks: 2000
+        - savegame: "opntitle-1.0.sav"
+          ticks: 20000000
+          mem-ticks: 10000
+        - savegame: "opntitle-1.1.sav"
+          ticks: 100000
+          mem-ticks: 2000
+        - savegame: "opntitle-1.2.sav"
+          ticks: 20000000
+          mem-ticks: 10000
+        - savegame: "opntitle-1.3.sav"
+          ticks: 20000000
+          mem-ticks: 10000
+        - savegame: "opntitle-1.4.sav"
+          ticks: 10000
+          mem-ticks: 2000
+        - savegame: "opntitle-1.5.sav"
+          ticks: 40000
+          mem-ticks: 2000
+        - savegame: "opntitle-1.7.sav"
+          ticks: 40000
+          mem-ticks: 2000
+        - savegame: "opntitle-1.9.sav"
+          ticks: 20000000
+          mem-ticks: 10000
+        - savegame: "lordaro_biggest_town_ever.sav"
+          ticks: 5000
+          mem-ticks: 1000
+        - savegame: "lordaro_British-Railways-4th-Oct-2082.sav"
+          ticks: 3000
+          mem-ticks: 1000
+        - savegame: "PublicServerGame_05_Final.sav"
+          ticks: 4000
+          mem-ticks: 1000
+        - savegame: "PublicServerGame_326_Final.sav"
+          ticks: 6000
+          mem-ticks: 1000
+        - savegame: "PublicServerGame_329_Final.sav"
+          ticks: 1000
+          mem-ticks: 1000
+        - savegame: "speed-test-600-15-Timbertrains-15th-Sep-2031.sav"
+          ticks: 1000
+          mem-ticks: 1000
+        - savegame: "timberwolf-Garnway-on-sea-Transport-1892-01-04.sav"
+          ticks: 50000
+          mem-ticks: 1000
+        - savegame: "timberwolf-Northern-Canal-Cooperative-1847-04-18.sav"
+          ticks: 20000
+          mem-ticks: 1000
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ matrix.savegame }}
+      ticks: ${{ matrix.ticks }}
+      mem-ticks: ${{ matrix.mem-ticks }}
+      date_today: ${{ needs.versions.outputs.date_today }}
+      date_yesterday: ${{ needs.versions.outputs.date_yesterday }}
+
+  report:
+    name: Report
+    needs:
+    - versions
+    - benchmark
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate access token
+      id: generate_token
+      uses: tibdex/github-app-token@v2
+      with:
+        app_id: ${{ secrets.PERFORMANCE_APP_ID }}
+        private_key: ${{ secrets.PERFORMANCE_APP_PRIVATE_KEY }}
+        installation_retrieval_mode: "repository"
+        installation_retrieval_payload: "TrueBrain/OpenTTD-performance"
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        token: ${{ steps.generate_token.outputs.token }}
+        ref: reports
+
+    - name: Download performance reports
+      uses: actions/download-artifact@v4
+      with:
+        pattern: performance-*
+        merge-multiple: true
+
+    - name: Download profiles
+      uses: actions/download-artifact@v4
+      with:
+        pattern: profile-*
+        merge-multiple: true
+
+    - name: Merge performance reports
+      shell: bash
+      id: merge
+      run: |
+        year=$(echo "${{ needs.versions.outputs.date_today }}" | cut -c1-4)
+        month=$(echo "${{ needs.versions.outputs.date_today }}" | cut -c5-6)
+        report=${year}/${month}/${{ needs.versions.outputs.date_today }}.performance.csv
+
+        echo "report=${report}" >> $GITHUB_OUTPUT
+
+        rm -rf ${year}/${month}/${{ needs.versions.outputs.date_today }}
+        mkdir -p ${year}/${month}/${{ needs.versions.outputs.date_today }}
+
+        mv *.cpu-prof.gz ${year}/${month}/${{ needs.versions.outputs.date_today }}/
+        mv *.mem-prof.gz ${year}/${month}/${{ needs.versions.outputs.date_today }}/
+
+        echo "savegame,version,cpu,cpu_stddev,memory" > ${report}
+        cat *.performance >> ${report}
+
+    - name: Store report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance
+        path: ${{ steps.merge.outputs.report }}
+        retention-days: 5
+
+    - name: Commit and push
+      shell: bash
+      run: |
+        year=$(echo "${{ needs.versions.outputs.date_today }}" | cut -c1-4)
+        month=$(echo "${{ needs.versions.outputs.date_today }}" | cut -c5-6)
+
+        git config --global user.name "OpenTTD Performance"
+        git config --global user.email "performance@openttd.org"
+
+        git add ${year}/${month}/${{ needs.versions.outputs.date_today }}.performance.csv
+        git add ${year}/${month}/${{ needs.versions.outputs.date_today }}
+
+        git commit -m "Add: performance results for ${{ needs.versions.outputs.date_today }}"
+        git push

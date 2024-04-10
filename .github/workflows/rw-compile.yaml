@@ -64,6 +64,11 @@ jobs:
           patch -p1 < benchmark/patches/cmake-icu.patch
         fi
 
+        # Older versions didn't always use UTC0 for the date in the version.
+        if [ -z "$(grep UTC0 cmake/scripts/FindVersion.cmake)" ]; then
+          patch -p1 < benchmark/patches/cmake-utc0.patch
+        fi
+
         # Force the TAG to be disabled, to ensure it is always considered a nightly build.
         patch -p1 < benchmark/patches/cmake-version.patch
 

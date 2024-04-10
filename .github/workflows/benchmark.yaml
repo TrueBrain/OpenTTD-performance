@@ -39,8 +39,8 @@ jobs:
         hash_today=$(git rev-list -n 1 --first-parent --before="${today}T23:59:59Z" master)
         hash_yesterday=$(git rev-list -n 1 --first-parent --before="${yesterday}T23:59:59Z" master)
 
-        today_actual=$(git show -s --format=%ci ${hash_today} | cut -d\  -f1)
-        yesterday_actual=$(git show -s --format=%ci ${hash_yesterday} | cut -d\  -f1)
+        today_actual=$(TZ=UTC0 git show -s --date=iso-local --format=%cd ${hash_today} | cut -d\  -f1)
+        yesterday_actual=$(TZ=UTC0 git show -s --date=iso-local --format=%cd ${hash_yesterday} | cut -d\  -f1)
 
         echo "Today's date: ${today_actual}"
         echo "Today's hash: ${hash_today}"

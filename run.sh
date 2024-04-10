@@ -16,7 +16,8 @@ for i in $(seq 1 5); do
 
     rm -f stat.csv memory
 
-    /usr/bin/time -o memory -f "%M" perf stat -x\; -o stat.csv -r5 ./openttd -X -c openttd.cfg -x -snull -mnull -vnull:ticks=${ticks} -g save/${savegame}
+    # We trap SIGINT, as otherwise "perf" is not returning the correct exit code.
+    /usr/bin/time -o memory -f "%M" perf stat -x\; -o stat.csv -r5 bash -c "trap '' SIGINT; ./openttd -X -c openttd.cfg -x -snull -mnull -vnull:ticks=${ticks} -g save/${savegame}"
     if [ "$?" != "0" ] || [ ! -e "stat.csv" ] || [ ! -e "memory" ]; then
         reason="crash"
         break

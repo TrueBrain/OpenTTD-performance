@@ -1,5 +1,5 @@
-name: Benchmark
-run-name: Benchmark (${{ inputs.date || 'scheduled' }})
+name: Performance
+run-name: Performance (${{ inputs.date || 'scheduled' }})
 
 on:
   schedule:

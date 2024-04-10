@@ -15,6 +15,7 @@ case ${type} in
         if [ "$?" != "0" ] || [ ! -e "openttd.cpu-prof" ]; then
             echo "Failed to create CPU profile"
             touch ${savegame}.cpu-prof
+            gzip ${savegame}.cpu-prof
             exit 0
         fi
 
@@ -28,6 +29,7 @@ case ${type} in
         if [ "$?" != "0" ] || [ ! -e "openttd.mem-prof.0001.heap" ]; then
             echo "Failed to create memory profile"
             touch ${savegame}.mem-prof
+            gzip ${savegame}.mem-prof
             exit 0
         fi
 

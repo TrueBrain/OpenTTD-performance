@@ -1,0 +1,93 @@
+name: Benchmark Loop
+
+on:
+  workflow_call:
+    inputs:
+      savegame:
+        required: true
+        type: string
+      ticks:
+        required: true
+        type: number
+      mem-ticks:
+        required: true
+        type: number
+      date-yesterday:
+        required: true
+        type: string
+      date-today:
+        required: true
+        type: string
+
+jobs:
+  attempt_1:
+    name: "Attempt #1"
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ inputs.savegame }}
+      ticks: ${{ inputs.ticks }}
+      mem-ticks: ${{ inputs.mem-ticks }}
+      date-today: ${{ inputs.date-today }}
+      date-yesterday: ${{ inputs.date-yesterday }}
+      continue-on-error: true
+
+  attempt_2:
+    name: "Attempt #2"
+
+    needs: attempt_1
+    if: needs.attempt_1.outputs.success != 'true'
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ inputs.savegame }}
+      ticks: ${{ inputs.ticks }}
+      mem-ticks: ${{ inputs.mem-ticks }}
+      date-today: ${{ inputs.date-today }}
+      date-yesterday: ${{ inputs.date-yesterday }}
+      continue-on-error: true
+
+  attempt_3:
+    name: "Attempt #3"
+
+    needs: attempt_2
+    if: needs.attempt_2.outputs.success != 'true'
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ inputs.savegame }}
+      ticks: ${{ inputs.ticks }}
+      mem-ticks: ${{ inputs.mem-ticks }}
+      date-today: ${{ inputs.date-today }}
+      date-yesterday: ${{ inputs.date-yesterday }}
+      continue-on-error: true
+
+  attempt_4:
+    name: "Attempt #4"
+
+    needs: attempt_3
+    if: needs.attempt_3.outputs.success != 'true'
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ inputs.savegame }}
+      ticks: ${{ inputs.ticks }}
+      mem-ticks: ${{ inputs.mem-ticks }}
+      date-today: ${{ inputs.date-today }}
+      date-yesterday: ${{ inputs.date-yesterday }}
+      continue-on-error: true
+
+  attempt_5:
+    name: "Attempt #5"
+
+    needs: attempt_4
+    if: needs.attempt_4.outputs.success != 'true'
+
+    uses: ./.github/workflows/rw-benchmark.yaml
+    with:
+      savegame: ${{ inputs.savegame }}
+      ticks: ${{ inputs.ticks }}
+      mem-ticks: ${{ inputs.mem-ticks }}
+      date-today: ${{ inputs.date-today }}
+      date-yesterday: ${{ inputs.date-yesterday }}
+      continue-on-error: false

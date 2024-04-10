@@ -12,18 +12,29 @@ on:
       mem-ticks:
         required: true
         type: number
-      date_yesterday:
+      date-yesterday:
         required: true
         type: string
-      date_today:
+      date-today:
         required: true
         type: string
+      continue-on-error:
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      success:
+        value: ${{ jobs.benchmark.outputs.success || 'false' }}
 
 jobs:
   benchmark:
     name: Benchmark
+    continue-on-error: ${{ inputs.continue-on-error }}
 
     runs-on: ubuntu-latest
+
+    outputs:
+      success: ${{ steps.success.outputs.success }}
 
     steps:
     - name: Checkout
@@ -105,20 +116,20 @@ jobs:
 
         ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
 
-    - name: Today (${{ inputs.date_today }})
+    - name: Today (${{ inputs.date-today }})
       shell: bash
       id: result_today
       run: |
-        cd openttd-${{ inputs.date_today }}-*
+        cd openttd-${{ inputs.date-today }}-*
         cp -R ../performance-config/* .
 
         ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
 
-    - name: Yesterday (${{ inputs.date_yesterday }})
+    - name: Yesterday (${{ inputs.date-yesterday }})
       shell: bash
       id: result_yesterday
       run: |
-        cd openttd-${{ inputs.date_yesterday }}-*
+        cd openttd-${{ inputs.date-yesterday }}-*
         cp -R ../performance-config/* .
 
         ../run.sh ${{ inputs.ticks }} ${{ inputs.savegame }}
@@ -126,7 +137,7 @@ jobs:
     - name: CPU profile
       shell: bash
       run: |
-        cd openttd-${{ inputs.date_today }}-*
+        cd openttd-${{ inputs.date-today }}-*
 
         ../profile.sh cpu ${{ inputs.ticks }} ${{ inputs.savegame }}
         mv ${{ inputs.savegame }}.cpu-prof.gz ..
@@ -134,7 +145,7 @@ jobs:
     - name: Memory profile
       shell: bash
       run: |
-        cd openttd-${{ inputs.date_today }}-*
+        cd openttd-${{ inputs.date-today }}-*
 
         ../profile.sh mem ${{ inputs.mem-ticks }} ${{ inputs.savegame }}
         mv ${{ inputs.savegame }}.mem-prof.gz ..
@@ -170,3 +181,8 @@ jobs:
         name: performance-${{ inputs.savegame }}
         path: ${{ inputs.savegame }}.performance
         retention-days: 5
+
+    - name: Mark run as success
+      id: success
+      run: |
+        echo "success=true" >> $GITHUB_OUTPUT

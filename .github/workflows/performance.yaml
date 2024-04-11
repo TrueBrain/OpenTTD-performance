@@ -47,17 +47,14 @@ jobs:
         echo "Yesterday's date: ${yesterday_actual}"
         echo "Yesterday's hash: ${hash_yesterday}"
 
-        if [ "${hash_today}" = "${hash_yesterday}" ]; then
-          echo "No new commits since yesterday."
-          exit 1
-        fi
-
+        echo "date_requested=$(echo ${today} | sed 's/-//g')" >> $GITHUB_OUTPUT
         echo "date_today=$(echo ${today_actual} | sed 's/-//g')" >> $GITHUB_OUTPUT
         echo "hash_today=${hash_today}" >> $GITHUB_OUTPUT
         echo "date_yesterday=$(echo ${yesterday_actual} | sed 's/-//g')" >> $GITHUB_OUTPUT
         echo "hash_yesterday=${hash_yesterday}" >> $GITHUB_OUTPUT
 
     outputs:
+      date-requested: ${{ steps.versions.outputs.date_requested }}
       date-today: ${{ steps.versions.outputs.date_today }}
       hash-today: ${{ steps.versions.outputs.hash_today }}
       date-yesterday: ${{ steps.versions.outputs.date_yesterday }}
@@ -66,6 +63,8 @@ jobs:
   compile:
     name: Compile
     needs: versions
+
+    if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
 
     strategy:
       fail-fast: false
@@ -88,6 +87,8 @@ jobs:
     needs:
     - versions
     - compile
+
+    if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
 
     strategy:
       fail-fast: false
@@ -162,6 +163,11 @@ jobs:
     - versions
     - benchmark
 
+    # Normally a job is skipped if its dependency is skipped.
+    # So we need to tell GitHub Runners to execute this step even
+    # if the benchmark was skipped.
+    if: always() && needs.versions.result == 'success' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'skipped')
+
     runs-on: ubuntu-latest
 
     steps:
@@ -181,18 +187,21 @@ jobs:
         repository: TrueBrain/OpenTTD-performance-reports
 
     - name: Download performance reports
+      if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
       uses: actions/download-artifact@v4
       with:
         pattern: performance-*
         merge-multiple: true
 
     - name: Download profiles
+      if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
       uses: actions/download-artifact@v4
       with:
         pattern: profile-*
         merge-multiple: true
 
     - name: Merge performance reports
+      if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
       shell: bash
       id: merge
       run: |
@@ -212,13 +221,15 @@ jobs:
         cat *.performance >> ${report}
 
     - name: Store report
+      if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
       uses: actions/upload-artifact@v4
       with:
         name: performance
         path: ${{ steps.merge.outputs.report }}
         retention-days: 5
 
-    - name: Commit and push
+    - name: Commit and push (reports)
+      if: needs.versions.outputs.hash-today != needs.versions.outputs.hash-yesterday
       shell: bash
       run: |
         year=$(echo "${{ needs.versions.outputs.date-today }}" | cut -c1-4)
@@ -231,4 +242,21 @@ jobs:
         git add ${year}/${month}/${{ needs.versions.outputs.date-today }}
 
         git commit -m "Add: performance results for ${{ needs.versions.outputs.date-today }}"
+        git push
+
+    - name: Commit and push (no commits)
+      if: needs.versions.outputs.hash-today == needs.versions.outputs.hash-yesterday
+      shell: bash
+      run: |
+        year=$(echo "${{ needs.versions.outputs.date-requested }}" | cut -c1-4)
+        month=$(echo "${{ needs.versions.outputs.date-requested }}" | cut -c5-6)
+
+        git config --global user.name "OpenTTD Performance"
+        git config --global user.email "performance@openttd.org"
+
+        mkdir -p ${year}/${month}
+        touch ${year}/${month}/${{ needs.versions.outputs.date-requested }}.no-commits
+        git add ${year}/${month}/${{ needs.versions.outputs.date-requested }}.no-commits
+
+        git commit -m "Add: ${{ needs.versions.outputs.date-requested }} had no commits on this day"
         git push
